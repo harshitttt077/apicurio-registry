@@ -25,6 +25,7 @@ import {
 import { FromNow, ListWithToolbar, ObjectDropdown, PleaseWaitModal } from "@apitomy/common-ui-components";
 import { ConfirmDeleteModal, CreateCommentModal, EditCommentModal, IfAuth, IfFeature } from "@app/components";
 import { GroupsService, useGroupsService } from "@services/useGroupsService.ts";
+import { LoaderGuard, newLoaderGuard } from "@utils/loader.utils.ts";
 
 
 export type VersionCommentsProps = {
@@ -119,18 +120,34 @@ export const VersionComments: FunctionComponent<VersionCommentsProps> = (props: 
     };
 
     useEffect(() => {
+        if (!props.version?.artifactId || !props.version?.version) {
+            return;
+        }
+
+        const guard: LoaderGuard = newLoaderGuard();
         setActionError(undefined);
         setIsLoading(true);
-        groups.getArtifactVersionComments(props.version.groupId || "default", props.version.artifactId!, props.version.version!)
-            .then(comments => {
+
+        const groupId: string = props.version.groupId || "default";
+        groups.getArtifactVersionComments(groupId, props.version.artifactId, props.version.version)
+            .then(guard.wrap((comments: Comment[]) => {
                 setComments(comments);
                 setIsLoading(false);
-            })
-            .catch((error: any) => {
+            }))
+            .catch(guard.wrap((error: any) => {
                 setActionError(error?.message || "Error fetching comments. Please refresh the page.");
                 setIsLoading(false);
-            });
-    }, []);
+            }));
+
+        return () => guard.cancel();
+    }, [props.version?.groupId, props.version?.artifactId, props.version?.version]);
+
+    useEffect(() => {
+        setFilter("");
+        setCollapsed([]);
+        setCommentToEdit(undefined);
+        setCommentToDelete(undefined);
+    }, [props.version?.groupId, props.version?.artifactId, props.version?.version]);
 
     useEffect(() => {
         setFilteredComments(comments.filter(comment => {
